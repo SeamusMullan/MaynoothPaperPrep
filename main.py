@@ -6,6 +6,18 @@ import re
 import threading
 from time import sleep
 
+
+
+from ui import run_app
+
+if __name__ == "__main__":
+    run_app()
+
+
+
+
+
+"""
 root = tk.Tk()
 root.title("Maynooth Paper Scraper")
 root.geometry("640x400")
@@ -103,3 +115,4 @@ start_button.pack(pady=10)
 # ------------------------------------------------------------------------
 
 root.mainloop()
+"""
