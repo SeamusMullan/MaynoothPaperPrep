@@ -107,6 +107,10 @@ class ScraperWorker(QThread):
 
 
 class ModelSettingsDialog(QDialog):
+    """
+    Dialog for configuring model parameters such as temperature and max tokens.
+    Used for both OpenAI and local models (Ollama).
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Model Settings")
@@ -128,6 +132,10 @@ class ModelSettingsDialog(QDialog):
 
 
 class MarkdownTextEdit(QTextEdit):
+    """
+    QTextEdit subclass that renders markdown as HTML for chat display.
+    Used in the AI Generation tab for rich chat formatting.
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setReadOnly(True)
@@ -179,6 +187,10 @@ class MainWindow(QMainWindow):
         self.apply_theme()
         
     def setup_ui(self):
+        """
+        Set up the main UI, including tabbed layout, all widgets, and signal connections.
+        Tabs: Login Info, Downloads/Module Selection, AI Generation.
+        """
         # ======================================================================
         # Main widget and layout
         # ======================================================================
@@ -408,6 +420,10 @@ class MainWindow(QMainWindow):
         self._scrape_next_module()
 
     def _scrape_next_module(self):
+        """
+        Internal: Start scraping the next module in the selected list.
+        Called recursively until all modules are processed.
+        """
         if self._current_scrape_index >= len(self._modules_to_scrape):
             self.on_scraper_finished(True, "All modules scraped.")
             return
@@ -424,6 +440,10 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Scraping {module_code} ({self._current_scrape_index+1}/{len(self._modules_to_scrape)})...")
 
     def _on_module_scrape_finished(self, success, message):
+        """
+        Internal: Handle completion of a single module scrape.
+        Continues to next module or finishes the process.
+        """
         if not success:
             self.on_scraper_finished(False, message)
             return
@@ -431,6 +451,10 @@ class MainWindow(QMainWindow):
         self._scrape_next_module()
 
     def on_scraper_finished(self, success, message):
+        """
+        Handle the completion of all scraping operations.
+        Restores UI and shows result to the user.
+        """
         self.start_button.setEnabled(True)
         self.start_button.setText("Start")
         self.progress_bar.setVisible(False)
@@ -453,6 +477,10 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(current)
 
     def send_message(self):
+        """
+        Send a message in the AI Generation tab.
+        Renders user message, calls AI backend (Ollama or placeholder), and renders response as markdown.
+        """
         text = self.message_input.text().strip()
         if text:
             self.message_list.append_markdown(f"**You:** {text}")
@@ -467,16 +495,26 @@ class MainWindow(QMainWindow):
             self.message_list.append_markdown(f"**AI:** {response}")
 
     def add_file(self):
+        """
+        Open a file dialog and add the selected file to the AI chat as a markdown entry.
+        """
         file_path, _ = QFileDialog.getOpenFileName(self, "Add File")
         if file_path:
             self.message_list.append_markdown(f"[File added: `{file_path}`]")
 
     def open_settings_dialog(self):
+        """
+        Open the model settings dialog and store the selected parameters.
+        """
         dlg = ModelSettingsDialog(self)
         if dlg.exec() == QDialog.Accepted:
             self._model_settings = dlg.get_settings()
 
     def query_ollama(self, prompt, model, settings):
+        """
+        Query a locally running Ollama model with the given prompt and settings.
+        Returns the model's response as a string.
+        """
         # Assumes Ollama is running locally on default port
         model_name = model.replace("ollama:", "").strip()
         url = f"http://localhost:11434/api/generate"
