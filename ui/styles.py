@@ -159,11 +159,12 @@ class AppTheme:
                 background-color: #3498db;
                 border-radius: 5px;
             }
-            QListWidget {
+            QTextEdit, QListWidget {
                 background: #fafafa;
                 border: 1px solid #cccccc;
                 border-radius: 5px;
                 font-size: 13px;
+                color: #222222;
             }
             QComboBox {
                 border: 1px solid #cccccc;
@@ -302,8 +303,13 @@ class AppTheme:
                 border-radius: 15px;
                 padding: 3px;
             }
+            QPushButton#settingsButton {
+                min-width: 100px;
+            }
             QCheckBox {
                 spacing: 5px;
+                font-size: 13px;
+                padding: 2px 0px 2px 2px;
             }
             QCheckBox::indicator {
                 width: 16px;
@@ -316,6 +322,61 @@ class AppTheme:
             QCheckBox::indicator:checked {
                 border: 1px solid #3498db;
                 background-color: #3498db;
+            }
+            QProgressBar {
+                border: 1px solid #34495e;
+                border-radius: 5px;
+                background: #22303a;
+                height: 20px;
+                text-align: center;
+                font-weight: bold;
+                color: #ecf0f1;
+            }
+            QProgressBar::chunk {
+                background-color: #3498db;
+                border-radius: 5px;
+            }
+            QTextEdit, QListWidget {
+                background: #22303a;
+                border: 1px solid #34495e;
+                border-radius: 5px;
+                font-size: 13px;
+                color: #ecf0f1;
+            }
+            QComboBox {
+                border: 1px solid #34495e;
+                border-radius: 4px;
+                padding: 4px 8px;
+                background: #22303a;
+                min-width: 120px;
+                color: #ecf0f1;
+            }
+            QComboBox QAbstractItemView {
+                border: 1px solid #34495e;
+                background: #34495e;
+                selection-background-color: #3498db;
+                selection-color: #ffffff;
+            }
+            QDialog {
+                background: #22303a;
+                color: #ecf0f1;
+            }
+            QDialog QLineEdit {
+                background: #1a2530;
+                color: #ecf0f1;
+                border: 1px solid #7f8c8d;
+            }
+            QDialog QLabel {
+                color: #ecf0f1;
+            }
+            QDialog QPushButton {
+                background: #34495e;
+                color: #ecf0f1;
+                border: 1px solid #7f8c8d;
+            }
+            QDialog QPushButton:hover {
+                background: #2980b9;
+                color: #fff;
             }
             QStatusBar {
                 background-color: #1a2530;

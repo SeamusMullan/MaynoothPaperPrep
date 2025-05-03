@@ -26,11 +26,12 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QCheckBox, QFileDialog,
     QGroupBox, QGridLayout, QMessageBox, QFrame, QSizePolicy,
-    QSpacerItem, QStatusBar, QTabWidget, QProgressBar, QListWidget, QComboBox
+    QSpacerItem, QStatusBar, QTabWidget, QProgressBar, QListWidget, QComboBox, QDialog, QTextEdit, QFormLayout, QDialogButtonBox
 )
-from PySide6.QtGui import QIcon, QFont, QPixmap, QColor
+from PySide6.QtGui import QIcon, QFont, QPixmap, QColor, QTextCursor
 from PySide6.QtCore import Qt, Signal, Slot, QThread
 
+import requests
 import scraper
 from .styles import theme
 
@@ -103,6 +104,43 @@ class ScraperWorker(QThread):
         else:
             # Error case: emit False with the error message
             self.finished.emit(False, str(result))
+
+
+class ModelSettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Model Settings")
+        layout = QFormLayout(self)
+        # Example settings
+        self.temperature_input = QLineEdit("1.0")
+        self.max_tokens_input = QLineEdit("512")
+        layout.addRow("Temperature", self.temperature_input)
+        layout.addRow("Max Tokens", self.max_tokens_input)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+    def get_settings(self):
+        return {
+            "temperature": float(self.temperature_input.text()),
+            "max_tokens": int(self.max_tokens_input.text()),
+        }
+
+
+class MarkdownTextEdit(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setReadOnly(True)
+        self.setAcceptRichText(True)
+    def append_markdown(self, markdown_text):
+        try:
+            import markdown
+            html = markdown.markdown(markdown_text, extensions=['fenced_code', 'tables'])
+        except ImportError:
+            html = markdown_text
+        self.moveCursor(QTextCursor.End)
+        self.insertHtml(html + "<br>")
+        self.moveCursor(QTextCursor.End)
 
 
 class MainWindow(QMainWindow):
@@ -247,23 +285,26 @@ class MainWindow(QMainWindow):
         # ------------------- AI Generation Tab -------------------
         self.ai_tab = QWidget()
         ai_tab_layout = QVBoxLayout(self.ai_tab)
-        # Message view
-        self.message_list = QListWidget()
+        # Markdown chat view
+        self.message_list = MarkdownTextEdit()
         ai_tab_layout.addWidget(self.message_list)
         # Message input and send
         msg_input_layout = QHBoxLayout()
         self.message_input = QLineEdit()
         self.message_input.setPlaceholderText("Type your message...")
         self.send_button = QPushButton("Send")
+        self.send_button.clicked.connect(self.send_message)
         msg_input_layout.addWidget(self.message_input)
         msg_input_layout.addWidget(self.send_button)
         ai_tab_layout.addLayout(msg_input_layout)
         # File add and model select
         file_model_layout = QHBoxLayout()
         self.add_file_button = QPushButton("Add File")
+        self.add_file_button.clicked.connect(self.add_file)
         self.model_select = QComboBox()
-        self.model_select.addItems(["gpt-3.5-turbo", "gpt-4", "llama-2"])  # Example models
+        self.model_select.addItems(["gpt-3.5-turbo", "gpt-4", "llama-2", "ollama:custom"])  # Example models
         self.settings_button = QPushButton("Model Settings")
+        self.settings_button.clicked.connect(self.open_settings_dialog)
         file_model_layout.addWidget(self.add_file_button)
         file_model_layout.addWidget(QLabel("Model:"))
         file_model_layout.addWidget(self.model_select)
@@ -327,8 +368,8 @@ class MainWindow(QMainWindow):
         
         # If a folder was selected (user didn't cancel the dialog)
         if folder_path:
-                        self.output_folder = folder_path
-                        self.output_display.setText(folder_path)
+            self.output_folder = folder_path
+            self.output_display.setText(folder_path)
     
     def start_scraper(self):
         """
@@ -344,74 +385,62 @@ class MainWindow(QMainWindow):
         The actual scraping is performed in a background thread to keep
         the UI responsive during the potentially long-running operation.
         """
-        # ======================================================================
-        # Input Validation
-        # ======================================================================
-        
-        # Validate username (must be 8 digits for Maynooth student ID)
-        if not re.search(r"[0-9]{8}", self.username_input.text()):
-            # Show error message if validation fails
-            QMessageBox.critical(
-                self,
-                "Error",
-                "Invalid username format. Use your student ID (e.g., 12345678)"
-            )
+        # Collect all selected modules from the checklist
+        selected_modules = [cb.text() for cb in self.module_checkboxes if cb.isChecked()]
+        if not selected_modules:
+            QMessageBox.critical(self, "Error", "Please select at least one module to download.")
             return
-            
         if not self.password_input.text():
-            # Show error message if validation fails
             QMessageBox.critical(self, "Error", "Password cannot be empty")
-            return  # Stop processing if validation fails
-            
-        # Validate module code (cannot be empty)
-        if not self.module_input.text():
-            # Show error message if validation fails
-            QMessageBox.critical(self, "Error", "Module code cannot be empty")
-            return  # Stop processing if validation fails
-            
-        # Validate output folder (cannot be empty)
+            return
         if not self.output_folder:
-            # Show error message if validation fails
             QMessageBox.critical(self, "Error", "Output folder cannot be empty")
-            return  # Stop processing if validation fails
-        
-        # ======================================================================
+            return
         # Prepare UI for Scraping
-        # ======================================================================
-        
-        # Disable the start button to prevent multiple scraping operations
         self.start_button.setEnabled(False)
-        
-        # Change button text to indicate that scraping is in progress
         self.start_button.setText("Scraping...")
-        
-        # Update status bar to show that scraping is in progress
         self.status_bar.showMessage("Scraping in progress...")
-        
-        # Reset and show the progress bar
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)
-        
-        # ======================================================================
-        # Start Scraping in Background Thread
-        # ======================================================================
-        
-        # Create a worker thread for the scraping operation
+        # Start scraping for each selected module, one after another
+        self._modules_to_scrape = selected_modules
+        self._current_scrape_index = 0
+        self._scrape_next_module()
+
+    def _scrape_next_module(self):
+        if self._current_scrape_index >= len(self._modules_to_scrape):
+            self.on_scraper_finished(True, "All modules scraped.")
+            return
+        module_code = self._modules_to_scrape[self._current_scrape_index]
         self.worker = ScraperWorker(
-            self.username_input.text(),     # Student ID for login
-            self.password_input.text(),     # Password for login
-            self.module_input.text(),       # Module code to scrape
-            self.output_folder              # Where to save the papers
+            self.username_input.text(),
+            self.password_input.text(),
+            module_code,
+            self.output_folder
         )
-        
-        # Connect the worker's finished signal to our callback method
-        self.worker.finished.connect(self.on_scraper_finished)
+        self.worker.finished.connect(self._on_module_scrape_finished)
         self.worker.progress.connect(self.on_download_progress)
-        
-        # Start the worker thread
-        # This will call the worker's run() method in a separate thread
         self.worker.start()
-    
+        self.status_bar.showMessage(f"Scraping {module_code} ({self._current_scrape_index+1}/{len(self._modules_to_scrape)})...")
+
+    def _on_module_scrape_finished(self, success, message):
+        if not success:
+            self.on_scraper_finished(False, message)
+            return
+        self._current_scrape_index += 1
+        self._scrape_next_module()
+
+    def on_scraper_finished(self, success, message):
+        self.start_button.setEnabled(True)
+        self.start_button.setText("Start")
+        self.progress_bar.setVisible(False)
+        if success:
+            self.status_bar.showMessage("Scraping completed successfully!")
+            QMessageBox.information(self, "Success", message)
+        else:
+            self.status_bar.showMessage("Error: Scraping failed")
+            QMessageBox.critical(self, "Error", message)
+
     def on_download_progress(self, current, total):
         """
         Update the progress bar based on the current progress of the download.
@@ -422,52 +451,53 @@ class MainWindow(QMainWindow):
         """
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(current)
-    
-    def on_scraper_finished(self, success, message):
-        """
-        Handle the completion of the scraper thread.
-        
-        This method is called when the ScraperWorker thread emits its finished signal.
-        It updates the UI based on whether the scraping was successful or not.
-        
-        Args:
-            success (bool): Whether the scraping operation was successful
-            message (str): Success message or error message
-        """
-        # ======================================================================
-        # Restore UI State
-        # ======================================================================
-        
-        # Re-enable the start button
-        self.start_button.setEnabled(True)
-        self.start_button.setText("Start")
-        
-        # Hide the progress bar
-        self.progress_bar.setVisible(False)
-        
-        # ======================================================================
-        # Handle Success or Failure
-        # ======================================================================
-        
-        if success:
-            # In case of success:
-            
-            # Log to console that we're generating notes (future feature)
-            print("Generating Notes...")
-            
-            # Update status bar with success message
-            self.status_bar.showMessage("Scraping completed successfully!")
-            
-            # Show success message dialog
-            QMessageBox.information(self, "Success", "Scraping completed successfully!")
-        else:
-            # In case of failure:
-            
-            # Update status bar with error message
-            self.status_bar.showMessage("Error: Scraping failed")
-            
-            # Show error message dialog with the specific error message
-            QMessageBox.critical(self, "Error", message)
+
+    def send_message(self):
+        text = self.message_input.text().strip()
+        if text:
+            self.message_list.append_markdown(f"**You:** {text}")
+            self.message_input.clear()
+            # Call AI backend (OpenAI or Ollama)
+            model = self.model_select.currentText()
+            settings = getattr(self, '_model_settings', {"temperature": 1.0, "max_tokens": 512})
+            if model.startswith("ollama:") or model.lower().startswith("llama"):
+                response = self.query_ollama(text, model, settings)
+            else:
+                response = "(response placeholder)"  # Replace with OpenAI call if needed
+            self.message_list.append_markdown(f"**AI:** {response}")
+
+    def add_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Add File")
+        if file_path:
+            self.message_list.append_markdown(f"[File added: `{file_path}`]")
+
+    def open_settings_dialog(self):
+        dlg = ModelSettingsDialog(self)
+        if dlg.exec() == QDialog.Accepted:
+            self._model_settings = dlg.get_settings()
+
+    def query_ollama(self, prompt, model, settings):
+        # Assumes Ollama is running locally on default port
+        model_name = model.replace("ollama:", "").strip()
+        url = f"http://localhost:11434/api/generate"
+        payload = {
+            "model": model_name,
+            "prompt": prompt,
+            "options": {
+                "temperature": settings.get("temperature", 1.0),
+                "num_predict": settings.get("max_tokens", 512)
+            }
+        }
+        try:
+            resp = requests.post(url, json=payload, timeout=60)
+            if resp.status_code == 200:
+                # Ollama streams responses, but for simplicity, just get the text
+                data = resp.json()
+                return data.get("response", "(no response)")
+            else:
+                return f"[Ollama error: {resp.status_code}]"
+        except Exception as e:
+            return f"[Ollama connection error: {e}]"
 
 
 def run_app():
