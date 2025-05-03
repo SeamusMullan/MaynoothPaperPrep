@@ -126,6 +126,45 @@ class ScraperWorker(QThread):
             self.finished.emit(False, str(result))
 
 
+class OllamaWorker(QThread):
+    """
+    Worker thread to run Ollama AI generation without blocking the UI.
+    Emits:
+        finished(str): Emitted when generation completes, with the AI response.
+        error(str): Emitted if an error occurs.
+    """
+    finished = Signal(str)
+    error = Signal(str)
+
+    def __init__(self, prompt, model, settings):
+        super().__init__()
+        self.prompt = prompt
+        self.model = model
+        self.settings = settings
+
+    def run(self):
+        import requests
+        model_name = self.model.replace("ollama:", "").strip()
+        url = f"http://localhost:11434/api/generate"
+        payload = {
+            "model": model_name,
+            "prompt": self.prompt,
+            "options": {
+                "temperature": self.settings.get("temperature", 1.0),
+                "num_predict": self.settings.get("max_tokens", 512),
+            },
+        }
+        try:
+            resp = requests.post(url, json=payload, timeout=60)
+            if resp.status_code == 200:
+                data = resp.json()
+                self.finished.emit(data.get("response", "(no response)"))
+            else:
+                self.error.emit(f"[Ollama error: {resp.status_code}]")
+        except Exception as e:
+            self.error.emit(f"[Ollama connection error: {e}]")
+
+
 class ModelSettingsDialog(QDialog):
     """
     Dialog for configuring model parameters such as temperature and max tokens.
@@ -534,18 +573,30 @@ class MainWindow(QMainWindow):
         if text:
             self.message_list.append_markdown(f"**You:** {text}")
             self.message_input.clear()
-            # Call AI backend (OpenAI or Ollama)
             model = self.model_select.currentText()
             settings = getattr(
                 self, "_model_settings", {"temperature": 1.0, "max_tokens": 512}
             )
             if model.startswith("ollama:") or model.lower().startswith("llama"):
-                response = self.query_ollama(text, model, settings)
+                self.send_button.setEnabled(False)
+                self.status_bar.showMessage("Generating AI response...")
+                self.ollama_worker = OllamaWorker(text, model, settings)
+                self.ollama_worker.finished.connect(self._on_ollama_finished)
+                self.ollama_worker.error.connect(self._on_ollama_error)
+                self.ollama_worker.start()
             else:
-                response = (
-                    "(response placeholder)"  # Replace with OpenAI call if needed
-                )
-            self.message_list.append_markdown(f"**AI:** {response}")
+                response = "(response placeholder)"  # Replace with OpenAI call if needed
+                self.message_list.append_markdown(f"**AI:** {response}")
+
+    def _on_ollama_finished(self, response):
+        self.message_list.append_markdown(f"**AI:** {response}")
+        self.send_button.setEnabled(True)
+        self.status_bar.showMessage("Ready")
+
+    def _on_ollama_error(self, error_msg):
+        self.message_list.append_markdown(f"**AI:** {error_msg}")
+        self.send_button.setEnabled(True)
+        self.status_bar.showMessage("Ready")
 
     def add_file(self):
         """
