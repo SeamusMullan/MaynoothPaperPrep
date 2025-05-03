@@ -32,4 +32,5 @@ uv run main.py
 ```
 
 ## How it works?
-The project runs a basic interface using tkinter, handles web requests+session via requests package and scrapes the web data using BeautifulSoup!
+The project runs a basic interface using handles web requests+session via requests package and scrapes the web data using BeautifulSoup!
+The UI runs on QT with multiple threads for UI and Scraper
