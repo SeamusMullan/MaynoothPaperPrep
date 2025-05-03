@@ -252,12 +252,25 @@ class MainWindow(QMainWindow):
         module_layout = QVBoxLayout()
         module_group.setLayout(module_layout)
         self.module_checkboxes = []
+        self.custom_modules = []
         # Placeholder: populate with template module codes
         template_modules = ["CS101", "CS102", "MA201", "PH301", "BI110"]
         for code in template_modules:
             cb = QCheckBox(code)
             self.module_checkboxes.append(cb)
             module_layout.addWidget(cb)
+        # Custom module add/remove controls
+        custom_layout = QHBoxLayout()
+        self.custom_module_input = QLineEdit()
+        self.custom_module_input.setPlaceholderText("Add custom module code...")
+        self.add_custom_btn = QPushButton("Add")
+        self.remove_custom_btn = QPushButton("Remove Selected")
+        custom_layout.addWidget(self.custom_module_input)
+        custom_layout.addWidget(self.add_custom_btn)
+        custom_layout.addWidget(self.remove_custom_btn)
+        module_layout.addLayout(custom_layout)
+        self.add_custom_btn.clicked.connect(self.add_custom_module)
+        self.remove_custom_btn.clicked.connect(self.remove_selected_custom_modules)
         downloads_tab_layout.addWidget(module_group)
         # Paper Info group
         paper_group = QGroupBox("Paper Information")
@@ -399,6 +412,7 @@ class MainWindow(QMainWindow):
         """
         # Collect all selected modules from the checklist
         selected_modules = [cb.text() for cb in self.module_checkboxes if cb.isChecked()]
+        selected_modules.extend(self.custom_modules)
         if not selected_modules:
             QMessageBox.critical(self, "Error", "Please select at least one module to download.")
             return
@@ -536,6 +550,28 @@ class MainWindow(QMainWindow):
                 return f"[Ollama error: {resp.status_code}]"
         except Exception as e:
             return f"[Ollama connection error: {e}]"
+
+    def add_custom_module(self):
+        """
+        Add a custom module code to the module selection list.
+        """
+        custom_code = self.custom_module_input.text().strip()
+        if custom_code and custom_code not in self.custom_modules:
+            cb = QCheckBox(custom_code)
+            self.module_checkboxes.append(cb)
+            self.custom_modules.append(custom_code)
+            self.tabs.widget(1).layout().itemAt(0).widget().layout().addWidget(cb)
+            self.custom_module_input.clear()
+
+    def remove_selected_custom_modules(self):
+        """
+        Remove selected custom module codes from the module selection list.
+        """
+        for cb in self.module_checkboxes[:]:
+            if cb.isChecked() and cb.text() in self.custom_modules:
+                self.module_checkboxes.remove(cb)
+                self.custom_modules.remove(cb.text())
+                cb.setParent(None)
 
 
 def run_app():
