@@ -1,6 +1,6 @@
 # MaynoothPaperPrep
 A scraper for past papers with integrated LLM!
-![screenshot](screenshot.png)
+![screenshot](screenshot_updated_ui_dark.png)
 
 This is a quick simple project that I made in order to aid me in my studies, and was also a fun excuse to mess around with web scraping lol
 
