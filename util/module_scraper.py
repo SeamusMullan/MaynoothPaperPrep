@@ -33,7 +33,7 @@ def fetch_modules():
                         module = {
                             "name": columns[0].get_text(strip=True),
                             "index": columns[1].get_text(strip=True),
-                            "semester": columns[2].get_text(strip=True),
+                            "semester": columns[3].get_text(strip=True),
                             "deparment": link.split('/')[-1].replace('-', ' ').title()
                         }
                         modules.append(module)
